@@ -1,0 +1,48 @@
+services:
+  we-mp-rss:
+    image: ghcr.io/rachelos/we-mp-rss:latest
+    container_name: we-mp-rss
+    environment:
+      - TZ=Asia/Shanghai
+      - GATHER.MODEL=web           # 切换到浏览器抓取模式
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data/we-mp-rss:/app/data
+    restart: unless-stopped
+
+  gist:
+    build:
+      context: ./Gist
+      dockerfile: ./docker/Dockerfile
+    container_name: gist
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/gist:/app/data
+    environment:
+      - GIST_LOG_LEVEL=info
+      - GIST_PUBLIC_READ=true       # 公开只读模式：GET 请求免 JWT，Discord 用户可直接访问
+      - TZ=Asia/Shanghai
+    restart: always
+
+  bridge:
+    build:
+      context: ./bridge
+      dockerfile: Dockerfile
+    container_name: wecord-bridge
+    ports:
+      - "8081:8081"
+    environment:
+      - TZ=Asia/Shanghai
+      # ── 从 .env 注入 ──
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - GIST_BASE_URL=${GIST_BASE_URL:-http://gist:8080}
+      - GIST_USERNAME=${GIST_USERNAME}
+      - GIST_PASSWORD=${GIST_PASSWORD}
+      - GIST_FEED_ID=${GIST_FEED_ID}
+      - MAX_SUMMARY_CHARS=${MAX_SUMMARY_CHARS:-300}
+    restart: unless-stopped
