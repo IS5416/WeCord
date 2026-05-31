@@ -1,0 +1,62 @@
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+
+  settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+        - fmt.Fprintf
+        - (*github.com/labstack/echo/v4.Response).Write
+        - os.Setenv
+        - os.Unsetenv
+        - os.RemoveAll
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - wrapperFunc
+
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+        text: "Error return value of.*Close.*is not checked"
+      - linters:
+          - errcheck
+        text: "Error return value of.*os\\.(Setenv|Unsetenv|RemoveAll).*is not checked"
+        path: "_test\\.go"
+      - linters:
+          - errcheck
+        text: "Error return value of.*fmt\\.Fprintf.*is not checked"
+        path: "handler/"
+      - linters:
+          - errcheck
+        text: "Error return value of.*Write.*is not checked"
+        path: "handler/"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

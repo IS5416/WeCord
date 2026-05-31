@@ -1,0 +1,537 @@
+package handler
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/labstack/echo/v4"
+
+	"gist/backend/internal/model"
+	"gist/backend/internal/service"
+	"gist/backend/pkg/logger"
+)
+
+const maxEntryReadBatchIDs = 1000
+
+type EntryHandler struct {
+	service            service.EntryService
+	readabilityService service.ReadabilityService
+}
+
+func NewEntryHandler(service service.EntryService, readabilityService service.ReadabilityService) *EntryHandler {
+	return &EntryHandler{service: service, readabilityService: readabilityService}
+}
+
+func (h *EntryHandler) RegisterRoutes(g *echo.Group) {
+	g.GET("/entries", h.List)
+	g.GET("/entries/:id", h.GetByID)
+	g.PATCH("/entries/read", h.UpdateManyReadStatus)
+	g.PATCH("/entries/:id/read", h.UpdateReadStatus)
+	g.PATCH("/entries/:id/starred", h.UpdateStarredStatus)
+	g.POST("/entries/:id/fetch-readable", h.FetchReadable)
+	g.POST("/entries/mark-read", h.MarkAllAsRead)
+	g.DELETE("/entries/readability-cache", h.ClearReadabilityCache)
+	g.DELETE("/entries/cache", h.ClearEntryCache)
+	g.GET("/unread-counts", h.GetUnreadCounts)
+	g.GET("/starred-count", h.GetStarredCount)
+}
+
+type entryResponse struct {
+	ID              string  `json:"id"`
+	FeedID          string  `json:"feedId"`
+	Title           *string `json:"title,omitempty"`
+	URL             *string `json:"url,omitempty"`
+	Content         *string `json:"content,omitempty"`
+	ReadableContent *string `json:"readableContent,omitempty"`
+	ThumbnailURL    *string `json:"thumbnailUrl,omitempty"`
+	Author          *string `json:"author,omitempty"`
+	PublishedAt     *string `json:"publishedAt,omitempty"`
+	Read            bool    `json:"read"`
+	Starred         bool    `json:"starred"`
+	CreatedAt       string  `json:"createdAt"`
+	UpdatedAt       string  `json:"updatedAt"`
+}
+
+type readableContentResponse struct {
+	ReadableContent string `json:"readableContent"`
+}
+
+type entryListResponse struct {
+	Entries []entryResponse `json:"entries"`
+	HasMore bool            `json:"hasMore"`
+}
+
+type updateReadRequest struct {
+	Read bool `json:"read"`
+}
+
+type updateManyReadRequest struct {
+	Read bool     `json:"read"`
+	IDs  []string `json:"ids"`
+}
+
+type updateStarredRequest struct {
+	Starred bool `json:"starred"`
+}
+
+type starredCountResponse struct {
+	Count int `json:"count"`
+}
+
+type entryClearResponse struct {
+	Deleted int64 `json:"deleted"`
+}
+
+type markAllReadRequest struct {
+	FeedID      *string `json:"feedId,omitempty"`
+	FolderID    *string `json:"folderId,omitempty"`
+	ContentType *string `json:"contentType,omitempty"`
+}
+
+type unreadCountsResponse struct {
+	Counts map[string]int `json:"counts"`
+}
+
+func parseEntryIDList(rawIDs []string) ([]int64, string) {
+	if len(rawIDs) == 0 {
+		return nil, "ids required"
+	}
+	if len(rawIDs) > maxEntryReadBatchIDs {
+		return nil, "too many ids"
+	}
+
+	ids := make([]int64, 0, len(rawIDs))
+	seen := make(map[int64]struct{}, len(rawIDs))
+	for _, rawID := range rawIDs {
+		id, err := strconv.ParseInt(rawID, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, "invalid id"
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	return ids, ""
+}
+
+// List returns a list of entries.
+// @Summary List entries
+// @Description Get a list of entries with optional filters and pagination
+// @Tags entries
+// @Produce json
+// @Param feedId query int false "Filter by feed ID"
+// @Param folderId query int false "Filter by folder ID"
+// @Param contentType query string false "Filter by content type (article, picture, notification)"
+// @Param unreadOnly query bool false "Only return unread entries"
+// @Param starredOnly query bool false "Only return starred entries"
+// @Param limit query int false "Limit the number of entries (default 50)"
+// @Param offset query int false "Offset for pagination"
+// @Success 200 {object} entryListResponse
+// @Failure 400 {object} errorResponse
+// @Router /entries [get]
+func (h *EntryHandler) List(c echo.Context) error {
+	params := service.EntryListParams{
+		Limit:  50,
+		Offset: 0,
+	}
+
+	if raw := c.QueryParam("feedId"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid feedId"})
+		}
+		params.FeedID = &id
+	}
+
+	if raw := c.QueryParam("folderId"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid folderId"})
+		}
+		params.FolderID = &id
+	}
+
+	if raw := c.QueryParam("contentType"); raw != "" {
+		if raw != "article" && raw != "picture" && raw != "notification" {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid contentType"})
+		}
+		params.ContentType = &raw
+	}
+
+	if c.QueryParam("unreadOnly") == "true" {
+		params.UnreadOnly = true
+	}
+
+	if c.QueryParam("starredOnly") == "true" {
+		params.StarredOnly = true
+	}
+
+	if c.QueryParam("hasThumbnail") == "true" {
+		params.HasThumbnail = true
+	}
+
+	if raw := c.QueryParam("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err == nil && limit > 0 && limit <= 100 {
+			params.Limit = limit
+		}
+	}
+
+	if raw := c.QueryParam("offset"); raw != "" {
+		offset, err := strconv.Atoi(raw)
+		if err == nil && offset >= 0 {
+			params.Offset = offset
+		}
+	}
+
+	// Request one extra to determine if there are more results
+	queryParams := params
+	queryParams.Limit = params.Limit + 1
+
+	entries, err := h.service.List(c.Request().Context(), queryParams)
+	if err != nil {
+		logger.Error("entry list failed", "module", "handler", "action", "list", "resource", "entry", "result", "failed", "error", err)
+		return writeServiceError(c, err)
+	}
+
+	// Determine hasMore by checking if we got more than requested
+	hasMore := len(entries) > params.Limit
+	if hasMore {
+		entries = entries[:params.Limit] // Trim to requested limit
+	}
+
+	response := entryListResponse{
+		Entries: make([]entryResponse, len(entries)),
+		HasMore: hasMore,
+	}
+	for i, e := range entries {
+		response.Entries[i] = toEntryResponse(e)
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// GetByID returns an entry by its ID.
+// @Summary Get entry
+// @Description Get a single entry by its ID
+// @Tags entries
+// @Produce json
+// @Param id path int true "Entry ID"
+// @Success 200 {object} entryResponse
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Router /entries/{id} [get]
+func (h *EntryHandler) GetByID(c echo.Context) error {
+	id, err := parseIDParam(c, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid id"})
+	}
+
+	entry, err := h.service.GetByID(c.Request().Context(), id)
+	if err != nil {
+		logger.Warn("entry get failed", "module", "handler", "action", "fetch", "resource", "entry", "result", "failed", "entry_id", id, "error", err)
+		return writeServiceError(c, err)
+	}
+
+	logger.Debug("entry fetched", "module", "handler", "action", "fetch", "resource", "entry", "result", "ok", "entry_id", id)
+	return c.JSON(http.StatusOK, toEntryResponse(entry))
+}
+
+// UpdateReadStatus updates the read status of an entry.
+// @Summary Update read status
+// @Description Mark an entry as read or unread
+// @Tags entries
+// @Accept json
+// @Produce json
+// @Param id path int true "Entry ID"
+// @Param read body updateReadRequest true "Read status"
+// @Success 204 "No Content"
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Router /entries/{id}/read [patch]
+func (h *EntryHandler) UpdateReadStatus(c echo.Context) error {
+	id, err := parseIDParam(c, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid id"})
+	}
+
+	var req updateReadRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+
+	if err := h.service.MarkAsRead(c.Request().Context(), id, req.Read); err != nil {
+		logger.Error("entry read status update failed", "module", "handler", "action", "update", "resource", "entry", "result", "failed", "entry_id", id, "read", req.Read, "error", err)
+		return writeServiceError(c, err)
+	}
+
+	logger.Info("entry read status updated", "module", "handler", "action", "update", "resource", "entry", "result", "ok", "entry_id", id, "read", req.Read)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// UpdateManyReadStatus updates the read status of multiple entries.
+// @Summary Update read status for entries
+// @Description Mark entries as read or unread by ID list
+// @Tags entries
+// @Accept json
+// @Produce json
+// @Param read body updateManyReadRequest true "Read status for entries"
+// @Success 204 "No Content"
+// @Failure 400 {object} errorResponse
+// @Router /entries/read [patch]
+func (h *EntryHandler) UpdateManyReadStatus(c echo.Context) error {
+	var req updateManyReadRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	ids, validationError := parseEntryIDList(req.IDs)
+	if validationError != "" {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: validationError})
+	}
+
+	if err := h.service.MarkManyAsRead(c.Request().Context(), ids, req.Read); err != nil {
+		logger.Error("entries read status update failed", "module", "handler", "action", "update", "resource", "entry", "result", "failed", "count", len(ids), "read", req.Read, "error", err)
+		return writeServiceError(c, err)
+	}
+
+	logger.Info("entries read status updated", "module", "handler", "action", "update", "resource", "entry", "result", "ok", "count", len(ids), "read", req.Read)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// FetchReadable fetches the readable content from the original URL.
+// @Summary Fetch readable content
+// @Description Extract readable content from the entry's original URL using readability
+// @Tags entries
+// @Produce json
+// @Param id path int true "Entry ID"
+// @Success 200 {object} readableContentResponse
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Router /entries/{id}/fetch-readable [post]
+func (h *EntryHandler) FetchReadable(c echo.Context) error {
+	id, err := parseIDParam(c, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid id"})
+	}
+
+	content, err := h.readabilityService.FetchReadableContent(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			logger.Warn("readability fetch failed", "module", "handler", "action", "fetch", "resource", "entry", "result", "failed", "entry_id", id, "error", "not found")
+			return c.JSON(http.StatusNotFound, errorResponse{Error: "entry not found"})
+		}
+		if errors.Is(err, service.ErrInvalid) {
+			logger.Warn("readability fetch failed", "module", "handler", "action", "fetch", "resource", "entry", "result", "failed", "entry_id", id, "error", "invalid content")
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "no URL or empty content"})
+		}
+		logger.Error("readability fetch failed", "module", "handler", "action", "fetch", "resource", "entry", "result", "failed", "entry_id", id, "error", err)
+		// Return the actual error message
+		return c.JSON(http.StatusBadGateway, errorResponse{Error: err.Error()})
+	}
+
+	logger.Info("readability fetched", "module", "handler", "action", "fetch", "resource", "entry", "result", "ok", "entry_id", id)
+	return c.JSON(http.StatusOK, readableContentResponse{ReadableContent: content})
+}
+
+// MarkAllAsRead marks all entries as read for a feed or folder.
+// @Summary Mark all as read
+// @Description Mark all entries as read, optionally filtered by feed, folder, or content type
+// @Tags entries
+// @Accept json
+// @Produce json
+// @Param request body markAllReadRequest true "Filter criteria"
+// @Success 204 "No Content"
+// @Failure 400 {object} errorResponse
+// @Router /entries/mark-read [post]
+func (h *EntryHandler) MarkAllAsRead(c echo.Context) error {
+	var req markAllReadRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+
+	var feedID, folderID *int64
+	if req.FeedID != nil {
+		id, err := strconv.ParseInt(*req.FeedID, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid feed ID"})
+		}
+		feedID = &id
+	}
+	if req.FolderID != nil {
+		id, err := strconv.ParseInt(*req.FolderID, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid folder ID"})
+		}
+		folderID = &id
+	}
+
+	// Validate contentType if provided
+	var contentType *string
+	if req.ContentType != nil {
+		ct := *req.ContentType
+		if ct != "article" && ct != "picture" && ct != "notification" {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid contentType"})
+		}
+		contentType = &ct
+	}
+
+	var feedIDValue any
+	if feedID != nil {
+		feedIDValue = *feedID
+	}
+	var folderIDValue any
+	if folderID != nil {
+		folderIDValue = *folderID
+	}
+	var contentTypeValue any
+	if contentType != nil {
+		contentTypeValue = *contentType
+	}
+
+	if err := h.service.MarkAllAsRead(c.Request().Context(), feedID, folderID, contentType); err != nil {
+		logger.Error("entries mark all read failed", "module", "handler", "action", "update", "resource", "entry", "result", "failed", "feed_id", feedIDValue, "folder_id", folderIDValue, "content_type", contentTypeValue, "error", err)
+		return writeServiceError(c, err)
+	}
+
+	logger.Info("entries marked read", "module", "handler", "action", "update", "resource", "entry", "result", "ok", "feed_id", feedIDValue, "folder_id", folderIDValue, "content_type", contentTypeValue)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// GetUnreadCounts returns unread counts for all feeds.
+// @Summary Get unread counts
+// @Description Get a map of feed IDs to their respective unread entry counts
+// @Tags entries
+// @Produce json
+// @Success 200 {object} unreadCountsResponse
+// @Router /unread-counts [get]
+func (h *EntryHandler) GetUnreadCounts(c echo.Context) error {
+	counts, err := h.service.GetUnreadCounts(c.Request().Context())
+	if err != nil {
+		logger.Error("entry unread counts failed", "module", "handler", "action", "list", "resource", "entry", "result", "failed", "error", err)
+		return writeServiceError(c, err)
+	}
+
+	// Convert int64 keys to string keys for JSON
+	stringCounts := make(map[string]int)
+	for feedID, count := range counts {
+		stringCounts[strconv.FormatInt(feedID, 10)] = count
+	}
+
+	return c.JSON(http.StatusOK, unreadCountsResponse{Counts: stringCounts})
+}
+
+// UpdateStarredStatus updates the starred status of an entry.
+// @Summary Update starred status
+// @Description Mark an entry as starred or unstarred
+// @Tags entries
+// @Accept json
+// @Produce json
+// @Param id path int true "Entry ID"
+// @Param starred body updateStarredRequest true "Starred status"
+// @Success 204 "No Content"
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Router /entries/{id}/starred [patch]
+func (h *EntryHandler) UpdateStarredStatus(c echo.Context) error {
+	id, err := parseIDParam(c, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid id"})
+	}
+
+	var req updateStarredRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+
+	if err := h.service.MarkAsStarred(c.Request().Context(), id, req.Starred); err != nil {
+		logger.Error("entry starred status update failed", "module", "handler", "action", "update", "resource", "entry", "result", "failed", "entry_id", id, "starred", req.Starred, "error", err)
+		return writeServiceError(c, err)
+	}
+
+	logger.Info("entry starred status updated", "module", "handler", "action", "update", "resource", "entry", "result", "ok", "entry_id", id, "starred", req.Starred)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// GetStarredCount returns the count of starred entries.
+// @Summary Get starred count
+// @Description Get the total count of starred entries
+// @Tags entries
+// @Produce json
+// @Success 200 {object} starredCountResponse
+// @Router /starred-count [get]
+func (h *EntryHandler) GetStarredCount(c echo.Context) error {
+	count, err := h.service.GetStarredCount(c.Request().Context())
+	if err != nil {
+		logger.Error("entry starred count failed", "module", "handler", "action", "list", "resource", "entry", "result", "failed", "error", err)
+		return writeServiceError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, starredCountResponse{Count: count})
+}
+
+// ClearReadabilityCache clears all readable_content from entries.
+// @Summary Clear readability cache
+// @Description Delete all extracted readable content from entries
+// @Tags entries
+// @Produce json
+// @Success 200 {object} entryClearResponse
+// @Failure 500 {object} errorResponse
+// @Router /entries/readability-cache [delete]
+func (h *EntryHandler) ClearReadabilityCache(c echo.Context) error {
+	deleted, err := h.service.ClearReadabilityCache(c.Request().Context())
+	if err != nil {
+		logger.Error("readability cache clear failed", "module", "handler", "action", "clear", "resource", "entry", "result", "failed", "error", err)
+		return c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
+	}
+
+	logger.Info("readability cache cleared", "module", "handler", "action", "clear", "resource", "entry", "result", "ok", "count", deleted)
+	return c.JSON(http.StatusOK, entryClearResponse{Deleted: deleted})
+}
+
+// ClearEntryCache deletes all unstarred entries.
+// @Summary Clear entry cache
+// @Description Delete all unstarred entries (preserves starred entries). Also resets all feeds' ETag/Last-Modified to force full refresh on next update.
+// @Tags entries
+// @Produce json
+// @Success 200 {object} entryClearResponse
+// @Failure 500 {object} errorResponse
+// @Router /entries/cache [delete]
+func (h *EntryHandler) ClearEntryCache(c echo.Context) error {
+	deleted, err := h.service.ClearEntryCache(c.Request().Context())
+	if err != nil {
+		logger.Error("entry cache clear failed", "module", "handler", "action", "clear", "resource", "entry", "result", "failed", "error", err)
+		return c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
+	}
+
+	logger.Info("entry cache cleared", "module", "handler", "action", "clear", "resource", "entry", "result", "ok", "count", deleted)
+	return c.JSON(http.StatusOK, entryClearResponse{Deleted: deleted})
+}
+
+func toEntryResponse(e model.Entry) entryResponse {
+	resp := entryResponse{
+		ID:              idToString(e.ID),
+		FeedID:          idToString(e.FeedID),
+		Title:           e.Title,
+		URL:             e.URL,
+		Content:         e.Content,
+		ReadableContent: e.ReadableContent,
+		ThumbnailURL:    e.ThumbnailURL,
+		Author:          e.Author,
+		Read:            e.Read,
+		Starred:         e.Starred,
+		CreatedAt:       e.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:       e.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+
+	if e.PublishedAt != nil {
+		formatted := e.PublishedAt.UTC().Format(time.RFC3339)
+		resp.PublishedAt = &formatted
+	}
+
+	return resp
+}

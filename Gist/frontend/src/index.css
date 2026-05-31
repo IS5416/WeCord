@@ -1,0 +1,504 @@
+@import 'tailwindcss';
+@plugin "tailwindcss-motion";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  /* Colors - using shadcn/ui compatible CSS variables */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-item-active: var(--item-active);
+  --color-item-hover: var(--item-hover);
+
+  /* Border radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  text-autospace: normal;
+  --app-dvh: 100dvh;
+
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 240 5.9% 10%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 240 5.9% 10%;
+  --radius: 0.5rem;
+  --sidebar: 240 4.8% 95.9%;
+  --sidebar-foreground: 240 5.9% 10%;
+  --item-active: color-mix(in oklch, hsl(var(--foreground)) 12%, transparent);
+  --item-hover: color-mix(in oklch, hsl(var(--foreground)) 8%, transparent);
+  
+  /* iOS-style easing curves */
+  --ease-ios: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --duration-sidebar-expand: 260ms;
+  --duration-sidebar-collapse: 220ms;
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --app-dvh: 100lvh;
+  }
+}
+
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+  --sidebar: 240 5.9% 10%;
+  --sidebar-foreground: 240 4.8% 95.9%;
+  --item-active: color-mix(in oklch, hsl(var(--foreground)) 15%, transparent);
+  --item-hover: color-mix(in oklch, hsl(var(--foreground)) 10%, transparent);
+}
+
+* {
+  border-color: theme(colors.border);
+}
+
+html {
+  /* Prevent pinch-to-zoom and browser default swipe navigation */
+  touch-action: pan-x pan-y;
+  overscroll-behavior: none;
+  background-color: theme(colors.background);
+  width: 100%;
+  height: var(--app-dvh);
+  overflow: hidden;
+}
+
+body {
+  background-color: theme(colors.background);
+  color: theme(colors.foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  width: 100%;
+  height: var(--app-dvh);
+  margin: 0;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: var(--app-dvh);
+  overflow: hidden;
+  background-color: theme(colors.background);
+}
+
+.app-shell {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: theme(colors.background);
+}
+
+.h-dvh {
+  height: var(--app-dvh);
+}
+
+/* PWA Safe Area Support - utility classes for components that need safe area padding */
+.safe-area-inset {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+.safe-area-x {
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 640px) {
+  .safe-area-x {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .safe-area-x {
+    padding-left: max(3rem, env(safe-area-inset-left, 0px));
+    padding-right: max(3rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+.dropdown-content {
+  --dropdown-x: 0px;
+  --dropdown-y: 0px;
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+  will-change: transform, opacity;
+}
+
+.dropdown-content[data-side='bottom'] {
+  --dropdown-y: -8px;
+}
+
+.dropdown-content[data-side='top'] {
+  --dropdown-y: 8px;
+}
+
+.dropdown-content[data-side='right'] {
+  --dropdown-x: -8px;
+}
+
+.dropdown-content[data-side='left'] {
+  --dropdown-x: 8px;
+}
+
+.dropdown-content[data-state='open'] {
+  animation: dropdown-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropdown-content[data-state='closed'] {
+  animation: dropdown-out 120ms ease;
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--dropdown-x), var(--dropdown-y), 0) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes dropdown-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate3d(var(--dropdown-x), var(--dropdown-y), 0) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .dropdown-content[data-state='open'],
+  .dropdown-content[data-state='closed'] {
+    animation: none;
+  }
+}
+
+/* AI Summary Box Animation */
+@keyframes summary-reveal {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0);
+  }
+}
+
+.ai-summary-box {
+  animation: summary-reveal 0.4s cubic-bezier(0.23, 1, 0.32, 1) both;
+  /* Required for clip-path animation to work smoothly */
+  will-change: clip-path, opacity;
+  /* Isolate animation to prevent affecting parent layout */
+  contain: paint;
+}
+
+.ai-summary-box .ai-summary-grid {
+  display: grid;
+}
+
+.ai-summary-box .ai-summary-content {
+  overflow: hidden;
+}
+
+/* AI Summary Shimmer Loading Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.ai-shimmer {
+  background: linear-gradient(90deg,
+      hsl(var(--primary) / 0.06) 0%,
+      hsl(var(--primary) / 0.15) 20%,
+      hsl(var(--primary) / 0.06) 40%,
+      hsl(var(--primary) / 0.06) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* AI Icon Thinking Animation */
+@keyframes ai-icon-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.ai-icon-thinking-wrapper {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+}
+
+.ai-icon-thinking-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.6) 50%,
+    transparent 100%
+  );
+  animation: ai-icon-sweep 1.5s linear infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-icon-thinking-wrapper::after {
+    animation: none;
+  }
+}
+
+.dropdown-surface {
+  background-image: linear-gradient(to bottom right,
+      hsl(var(--popover) / 0.98),
+      hsl(var(--popover) / 0.9));
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.dropdown-surface-glow {
+  background: linear-gradient(to bottom right,
+      hsl(var(--primary) / 0.08),
+      transparent 45%,
+      hsl(var(--primary) / 0.05));
+}
+
+.entry-content {
+  --entry-border: hsl(var(--border));
+  --entry-muted: hsl(var(--muted-foreground));
+  --entry-link: hsl(var(--primary));
+  --entry-code-bg: hsl(var(--muted) / 0.6);
+  --entry-code-border: hsl(var(--border));
+  --entry-quote-bg: hsl(var(--muted) / 0.45);
+  --entry-table-head: hsl(var(--muted) / 0.6);
+  --shiki-foreground: #1f2328;
+  --shiki-background: #f6f8fa;
+}
+
+.dark .entry-content {
+  --entry-code-bg: hsl(var(--secondary) / 0.55);
+  --entry-quote-bg: hsl(var(--secondary) / 0.5);
+  --entry-table-head: hsl(var(--secondary) / 0.65);
+  --shiki-foreground: #e6edf3;
+  --shiki-background: #0d1117;
+}
+
+/* Custom prose styling to match shadcn/ui theme */
+.entry-content .prose {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-lead: hsl(var(--muted-foreground));
+  --tw-prose-links: hsl(var(--primary));
+  --tw-prose-bold: hsl(var(--foreground));
+  --tw-prose-counters: hsl(var(--muted-foreground));
+  --tw-prose-bullets: hsl(var(--muted-foreground));
+  --tw-prose-hr: hsl(var(--border));
+  --tw-prose-quotes: hsl(var(--foreground) / 0.8);
+  --tw-prose-quote-borders: hsl(var(--border));
+  --tw-prose-captions: hsl(var(--muted-foreground));
+  --tw-prose-kbd: hsl(var(--foreground));
+  --tw-prose-kbd-shadows: hsl(var(--foreground) / 0.1);
+  --tw-prose-code: hsl(var(--foreground));
+  --tw-prose-pre-code: var(--shiki-foreground);
+  --tw-prose-pre-bg: var(--shiki-background);
+  --tw-prose-th-borders: hsl(var(--border));
+  --tw-prose-td-borders: hsl(var(--border));
+  /* Invert colors for dark mode (prose-invert class uses these) */
+  --tw-prose-invert-body: hsl(var(--foreground));
+  --tw-prose-invert-headings: hsl(var(--foreground));
+  --tw-prose-invert-lead: hsl(var(--muted-foreground));
+  --tw-prose-invert-links: hsl(var(--primary));
+  --tw-prose-invert-bold: hsl(var(--foreground));
+  --tw-prose-invert-counters: hsl(var(--muted-foreground));
+  --tw-prose-invert-bullets: hsl(var(--muted-foreground));
+  --tw-prose-invert-hr: hsl(var(--border));
+  --tw-prose-invert-quotes: hsl(var(--foreground) / 0.8);
+  --tw-prose-invert-quote-borders: hsl(var(--border));
+  --tw-prose-invert-captions: hsl(var(--muted-foreground));
+  --tw-prose-invert-kbd: hsl(var(--foreground));
+  --tw-prose-invert-kbd-shadows: hsl(var(--foreground) / 0.1);
+  --tw-prose-invert-code: hsl(var(--foreground));
+  --tw-prose-invert-pre-code: var(--shiki-foreground);
+  --tw-prose-invert-pre-bg: var(--shiki-background);
+  --tw-prose-invert-th-borders: hsl(var(--border));
+  --tw-prose-invert-td-borders: hsl(var(--border));
+}
+
+/* Code block internal styling - required for Shiki syntax highlighting */
+.entry-content .prose :where(pre code):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  display: grid;
+  overflow-x: auto;
+  padding: 0.75rem 0;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  background: transparent;
+  color: var(--shiki-foreground);
+}
+
+/* Line styling */
+.entry-content .prose pre code > .line {
+  display: block;
+  padding: 0 1rem;
+}
+
+/* Line hover effect */
+.entry-content .prose pre code > .line:hover {
+  background: hsl(var(--foreground) / 0.04);
+}
+
+/* Diff and highlight base styles */
+.entry-content .prose pre code > .line.highlighted,
+.entry-content .prose pre code > .line.diff {
+  position: relative;
+}
+
+.entry-content .prose pre code > .line.highlighted::before,
+.entry-content .prose pre code > .line.diff::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 2px;
+}
+
+/* Diff add (+) */
+.entry-content .prose pre code > .line.diff.add {
+  background: hsl(142 76% 36% / 0.15);
+}
+
+.entry-content .prose pre code > .line.diff.add::before {
+  background: hsl(142 76% 36%);
+}
+
+/* Diff remove (-) */
+.entry-content .prose pre code > .line.diff.remove {
+  background: hsl(0 84% 60% / 0.15);
+}
+
+.entry-content .prose pre code > .line.diff.remove::before {
+  background: hsl(0 84% 60%);
+}
+
+/* Line highlight */
+.entry-content .prose pre code > .line.highlighted {
+  background: hsl(var(--primary) / 0.1);
+}
+
+.entry-content .prose pre code > .line.highlighted::before {
+  background: hsl(var(--primary));
+}
+
+/* Table wrapper - isolate layout calculation to prevent iOS Safari crash */
+.entry-content .prose .article-table-wrapper {
+  /* iOS 16+: isolate layout and paint to prevent tables from affecting outer layout */
+  contain: layout paint;
+}
+
+/* iOS 18+ progressive enhancement: skip rendering off-screen tables */
+@supports (content-visibility: auto) {
+  .entry-content .prose .article-table-wrapper {
+    content-visibility: auto;
+    contain-intrinsic-block-size: auto 200px;
+  }
+}
+
+/* Shiki syntax highlighting - CSS variables mode for dual theme support */
+.entry-content .prose pre.shiki,
+.entry-content .prose pre.shiki span {
+  color: var(--shiki-light);
+  background-color: transparent;
+}
+
+.dark .entry-content .prose pre.shiki,
+.dark .entry-content .prose pre.shiki span {
+  color: var(--shiki-dark);
+  background-color: transparent;
+}

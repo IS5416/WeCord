@@ -1,0 +1,398 @@
+package handler
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/labstack/echo/v4"
+
+	"gist/backend/internal/model"
+	"gist/backend/internal/service"
+	"gist/backend/pkg/logger"
+	"gist/backend/pkg/network"
+)
+
+type FeedHandler struct {
+	service        service.FeedService
+	refreshService service.RefreshService
+}
+
+type createFeedRequest struct {
+	URL      string  `json:"url"`
+	FolderID *string `json:"folderId"`
+	Title    string  `json:"title"`
+	Type     string  `json:"type"`
+}
+
+type updateTypeRequest struct {
+	Type string `json:"type"`
+}
+
+type feedConflictResponse struct {
+	Error        string       `json:"error" example:"feed_exists"`
+	ExistingFeed feedResponse `json:"existingFeed"`
+}
+
+type updateFeedRequest struct {
+	Title                 string  `json:"title" binding:"required"`
+	FolderID              *string `json:"folderId"`
+	SummaryPromptReminder *string `json:"summaryPromptReminder"`
+}
+
+type deleteFeedsRequest struct {
+	IDs []string `json:"ids"`
+}
+
+type feedResponse struct {
+	ID                    string  `json:"id"`
+	FolderID              *string `json:"folderId,omitempty"`
+	Title                 string  `json:"title"`
+	URL                   string  `json:"url"`
+	SiteURL               *string `json:"siteUrl,omitempty"`
+	Description           *string `json:"description,omitempty"`
+	SummaryPromptReminder *string `json:"summaryPromptReminder,omitempty"`
+	IconPath              *string `json:"iconPath,omitempty"`
+	Type                  string  `json:"type"`
+	ETag                  *string `json:"etag,omitempty"`
+	LastModified          *string `json:"lastModified,omitempty"`
+	ErrorMessage          *string `json:"errorMessage,omitempty"`
+	CreatedAt             string  `json:"createdAt"`
+	UpdatedAt             string  `json:"updatedAt"`
+}
+
+type refreshStatusResponse struct {
+	IsRefreshing    bool    `json:"isRefreshing"`
+	LastRefreshedAt *string `json:"lastRefreshedAt,omitempty"`
+}
+
+type feedPreviewResponse struct {
+	URL         string  `json:"url"`
+	Title       string  `json:"title"`
+	Description *string `json:"description,omitempty"`
+	SiteURL     *string `json:"siteUrl,omitempty"`
+	ImageURL    *string `json:"imageUrl,omitempty"`
+	ItemCount   *int    `json:"itemCount,omitempty"`
+	LastUpdated *string `json:"lastUpdated,omitempty"`
+}
+
+func NewFeedHandler(service service.FeedService, refreshService service.RefreshService) *FeedHandler {
+	return &FeedHandler{service: service, refreshService: refreshService}
+}
+
+func (h *FeedHandler) RegisterRoutes(g *echo.Group) {
+	g.POST("/feeds", h.Create)
+	g.POST("/feeds/refresh", h.RefreshAll)
+	g.GET("/feeds/refresh", h.RefreshStatus)
+	g.GET("/feeds/preview", h.Preview)
+	g.GET("/feeds", h.List)
+	g.PUT("/feeds/:id", h.Update)
+	g.PATCH("/feeds/:id/type", h.UpdateType)
+	g.DELETE("/feeds/:id", h.Delete)
+	g.DELETE("/feeds", h.DeleteBatch)
+}
+
+// Create creates a new feed.
+// @Summary Create a feed
+// @Description Subscribe to a new RSS/Atom feed
+// @Tags feeds
+// @Accept json
+// @Produce json
+// @Param feed body createFeedRequest true "Feed creation request"
+// @Success 201 {object} feedResponse
+// @Failure 400 {object} errorResponse
+// @Failure 409 {object} feedConflictResponse "Feed URL already exists"
+// @Router /feeds [post]
+func (h *FeedHandler) Create(c echo.Context) error {
+	var req createFeedRequest
+	if err := c.Bind(&req); err != nil {
+		logger.Debug("feed create invalid request", "module", "handler", "action", "create", "resource", "feed", "result", "failed", "error", err)
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	var folderID *int64
+	if req.FolderID != nil {
+		id, err := strconv.ParseInt(*req.FolderID, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid folder ID"})
+		}
+		folderID = &id
+	}
+	feedType := req.Type
+	if feedType == "" {
+		feedType = "article"
+	} else if !isValidContentType(feedType) {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "type must be article, picture, or notification"})
+	}
+	feed, err := h.service.Add(c.Request().Context(), req.URL, folderID, req.Title, feedType)
+	if err != nil {
+		var conflictErr *service.FeedConflictError
+		if errors.As(err, &conflictErr) {
+			logger.Warn("feed create conflict", "module", "handler", "action", "create", "resource", "feed", "result", "failed", "host", network.ExtractHost(req.URL), "feed_id", conflictErr.ExistingFeed.ID, "feed_title", conflictErr.ExistingFeed.Title)
+			return c.JSON(http.StatusConflict, feedConflictResponse{
+				Error:        "feed_exists",
+				ExistingFeed: toFeedResponse(conflictErr.ExistingFeed),
+			})
+		}
+		logger.Error("feed create failed", "module", "handler", "action", "create", "resource", "feed", "result", "failed", "host", network.ExtractHost(req.URL), "error", err)
+		return writeServiceError(c, err)
+	}
+	logger.Info("feed created", "module", "handler", "action", "create", "resource", "feed", "result", "ok", "feed_id", feed.ID, "feed_title", feed.Title, "host", network.ExtractHost(feed.URL))
+	return c.JSON(http.StatusCreated, toFeedResponse(feed))
+}
+
+// List returns all feeds, optionally filtered by folder.
+// @Summary List feeds
+// @Description Get a list of all subscribed feeds
+// @Tags feeds
+// @Produce json
+// @Param folderId query int false "Filter by folder ID"
+// @Success 200 {array} feedResponse
+// @Router /feeds [get]
+func (h *FeedHandler) List(c echo.Context) error {
+	var folderID *int64
+	if raw := c.QueryParam("folderId"); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+		}
+		folderID = &parsed
+	}
+
+	feeds, err := h.service.List(c.Request().Context(), folderID)
+	if err != nil {
+		logger.Error("feed list failed", "module", "handler", "action", "list", "resource", "feed", "result", "failed", "folder_id", folderID, "error", err)
+		return writeServiceError(c, err)
+	}
+	response := make([]feedResponse, 0, len(feeds))
+	for _, feed := range feeds {
+		response = append(response, toFeedResponse(feed))
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
+// Preview fetches a feed's information without subscribing.
+// @Summary Preview a feed
+// @Description Fetch information about a feed from its URL
+// @Tags feeds
+// @Produce json
+// @Param url query string true "Feed URL"
+// @Success 200 {object} feedPreviewResponse
+// @Failure 400 {object} errorResponse
+// @Router /feeds/preview [get]
+func (h *FeedHandler) Preview(c echo.Context) error {
+	rawURL := strings.TrimSpace(c.QueryParam("url"))
+	if rawURL == "" {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	preview, err := h.service.Preview(c.Request().Context(), rawURL)
+	if err != nil {
+		logger.Warn("feed preview failed", "module", "handler", "action", "fetch", "resource", "feed", "result", "failed", "host", network.ExtractHost(rawURL), "error", err)
+		return writeServiceError(c, err)
+	}
+	logger.Debug("feed preview", "module", "handler", "action", "fetch", "resource", "feed", "result", "ok", "host", network.ExtractHost(rawURL))
+	return c.JSON(http.StatusOK, toFeedPreviewResponse(preview))
+}
+
+// Update updates an existing feed.
+// @Summary Update a feed
+// @Description Update an existing feed. title is required; folder and summary prompt reminder are optional.
+// @Tags feeds
+// @Accept json
+// @Produce json
+// @Param id path int true "Feed ID"
+// @Param feed body updateFeedRequest true "Feed update request"
+// @Success 200 {object} feedResponse
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Router /feeds/{id} [put]
+func (h *FeedHandler) Update(c echo.Context) error {
+	id, err := parseIDParam(c, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	var req updateFeedRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	if strings.TrimSpace(req.Title) == "" {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "title is required"})
+	}
+	var folderID *int64
+	if req.FolderID != nil {
+		fid, err := strconv.ParseInt(*req.FolderID, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid folder ID"})
+		}
+		folderID = &fid
+	}
+	feed, err := h.service.Update(c.Request().Context(), id, req.Title, folderID, req.SummaryPromptReminder)
+	if err != nil {
+		logger.Error("feed update failed", "module", "handler", "action", "update", "resource", "feed", "result", "failed", "feed_id", id, "error", err)
+		return writeServiceError(c, err)
+	}
+	logger.Info("feed updated", "module", "handler", "action", "update", "resource", "feed", "result", "ok", "feed_id", feed.ID, "feed_title", feed.Title)
+	return c.JSON(http.StatusOK, toFeedResponse(feed))
+}
+
+// UpdateType updates the content type of a feed.
+// @Summary Update feed type
+// @Description Change the content type of a feed (article/picture/notification)
+// @Tags feeds
+// @Accept json
+// @Param id path int true "Feed ID"
+// @Param request body updateTypeRequest true "Type update request"
+// @Success 204 "No Content"
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Router /feeds/{id}/type [patch]
+func (h *FeedHandler) UpdateType(c echo.Context) error {
+	id, err := parseIDParam(c, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	var req updateTypeRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	if !isValidContentType(req.Type) {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "type must be article, picture, or notification"})
+	}
+	if err := h.service.UpdateType(c.Request().Context(), id, req.Type); err != nil {
+		logger.Error("feed update type failed", "module", "handler", "action", "update", "resource", "feed", "result", "failed", "feed_id", id, "type", req.Type, "error", err)
+		return writeServiceError(c, err)
+	}
+	logger.Info("feed type updated", "module", "handler", "action", "update", "resource", "feed", "result", "ok", "feed_id", id, "type", req.Type)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// Delete deletes a feed.
+// @Summary Delete a feed
+// @Description Unsubscribe from a feed
+// @Tags feeds
+// @Param id path int true "Feed ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Router /feeds/{id} [delete]
+func (h *FeedHandler) Delete(c echo.Context) error {
+	id, err := parseIDParam(c, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	if err := h.service.Delete(c.Request().Context(), id); err != nil {
+		logger.Error("feed delete failed", "module", "handler", "action", "delete", "resource", "feed", "result", "failed", "feed_id", id, "error", err)
+		return writeServiceError(c, err)
+	}
+	logger.Info("feed deleted", "module", "handler", "action", "delete", "resource", "feed", "result", "ok", "feed_id", id)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// DeleteBatch deletes multiple feeds.
+// @Summary Delete multiple feeds
+// @Description Unsubscribe from multiple feeds at once
+// @Tags feeds
+// @Accept json
+// @Param request body deleteFeedsRequest true "Feed IDs to delete"
+// @Success 204 "No Content"
+// @Failure 400 {object} errorResponse
+// @Router /feeds [delete]
+func (h *FeedHandler) DeleteBatch(c echo.Context) error {
+	var req deleteFeedsRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid request"})
+	}
+	if len(req.IDs) == 0 {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "no feed IDs provided"})
+	}
+
+	// Parse all IDs first
+	ids := make([]int64, 0, len(req.IDs))
+	for _, idStr := range req.IDs {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid feed ID"})
+		}
+		ids = append(ids, id)
+	}
+
+	// Delete all at once
+	if err := h.service.DeleteBatch(c.Request().Context(), ids); err != nil {
+		logger.Error("feed batch delete failed", "module", "handler", "action", "delete", "resource", "feed", "result", "failed", "count", len(ids), "error", err)
+		return writeServiceError(c, err)
+	}
+
+	logger.Info("feed batch deleted", "module", "handler", "action", "delete", "resource", "feed", "result", "ok", "count", len(ids))
+	return c.NoContent(http.StatusNoContent)
+}
+
+// RefreshStatus returns the current refresh status.
+// @Summary Get refresh status
+// @Description Get the current refresh status including whether a refresh is in progress and when the last refresh completed
+// @Tags feeds
+// @Produce json
+// @Success 200 {object} refreshStatusResponse
+// @Router /feeds/refresh [get]
+func (h *FeedHandler) RefreshStatus(c echo.Context) error {
+	status := h.refreshService.GetRefreshStatus()
+	resp := refreshStatusResponse{
+		IsRefreshing: status.IsRefreshing,
+	}
+	if status.LastRefreshedAt != nil {
+		t := status.LastRefreshedAt.UTC().Format(time.RFC3339)
+		resp.LastRefreshedAt = &t
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// RefreshAll triggers a refresh of all feeds.
+// @Summary Refresh all feeds
+// @Description Trigger an immediate refresh of all subscribed feeds
+// @Tags feeds
+// @Success 204 "No Content"
+// @Failure 409 {object} errorResponse "Refresh already in progress"
+// @Router /feeds/refresh [post]
+func (h *FeedHandler) RefreshAll(c echo.Context) error {
+	if err := h.refreshService.RefreshAll(c.Request().Context()); err != nil {
+		if errors.Is(err, service.ErrAlreadyRefreshing) {
+			logger.Warn("feed refresh skipped", "module", "handler", "action", "refresh", "resource", "feed", "result", "skipped")
+			return c.JSON(http.StatusConflict, errorResponse{Error: "refresh already in progress"})
+		}
+		logger.Error("feed refresh failed", "module", "handler", "action", "refresh", "resource", "feed", "result", "failed", "error", err)
+		return writeServiceError(c, err)
+	}
+	logger.Info("feed refresh triggered", "module", "handler", "action", "refresh", "resource", "feed", "result", "ok")
+	return c.NoContent(http.StatusNoContent)
+}
+
+func toFeedResponse(feed model.Feed) feedResponse {
+	return feedResponse{
+		ID:                    idToString(feed.ID),
+		FolderID:              idPtrToString(feed.FolderID),
+		Title:                 feed.Title,
+		URL:                   feed.URL,
+		SiteURL:               feed.SiteURL,
+		Description:           feed.Description,
+		SummaryPromptReminder: feed.SummaryPromptReminder,
+		IconPath:              feed.IconPath,
+		Type:                  feed.Type,
+		ETag:                  feed.ETag,
+		LastModified:          feed.LastModified,
+		ErrorMessage:          feed.ErrorMessage,
+		CreatedAt:             feed.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:             feed.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func toFeedPreviewResponse(preview service.FeedPreview) feedPreviewResponse {
+	return feedPreviewResponse{
+		URL:         preview.URL,
+		Title:       preview.Title,
+		Description: preview.Description,
+		SiteURL:     preview.SiteURL,
+		ImageURL:    preview.ImageURL,
+		ItemCount:   preview.ItemCount,
+		LastUpdated: preview.LastUpdated,
+	}
+}

@@ -1,0 +1,1966 @@
+basePath: /api
+definitions:
+  gist_backend_internal_service.BatchTranslateResult:
+    properties:
+      cached:
+        type: boolean
+      id:
+        type: string
+      summary:
+        type: string
+      title:
+        type: string
+    type: object
+  gist_backend_internal_service.ImportResult:
+    properties:
+      feedsCreated:
+        type: integer
+      feedsSkipped:
+        type: integer
+      foldersCreated:
+        type: integer
+      foldersSkipped:
+        type: integer
+    type: object
+  gist_backend_internal_service.ImportTask:
+    properties:
+      createdAt:
+        type: string
+      current:
+        type: integer
+      error:
+        type: string
+      feed:
+        type: string
+      id:
+        type: string
+      result:
+        $ref: '#/definitions/gist_backend_internal_service.ImportResult'
+      status:
+        description: '"running", "done", "error", "cancelled"'
+        type: string
+      total:
+        type: integer
+    type: object
+  internal_handler.aiSettingsRequest:
+    properties:
+      apiKey:
+        type: string
+      autoSummary:
+        type: boolean
+      autoTranslate:
+        type: boolean
+      baseUrl:
+        type: string
+      model:
+        type: string
+      provider:
+        type: string
+      rateLimit:
+        type: integer
+      reasoningEffort:
+        type: string
+      summaryLanguage:
+        type: string
+      thinking:
+        type: boolean
+      thinkingBudget:
+        type: integer
+      thinkingSupported:
+        type: boolean
+    type: object
+  internal_handler.aiSettingsResponse:
+    properties:
+      apiKey:
+        type: string
+      autoSummary:
+        type: boolean
+      autoTranslate:
+        type: boolean
+      baseUrl:
+        type: string
+      model:
+        type: string
+      provider:
+        type: string
+      rateLimit:
+        type: integer
+      reasoningEffort:
+        type: string
+      summaryLanguage:
+        type: string
+      thinking:
+        type: boolean
+      thinkingBudget:
+        type: integer
+      thinkingSupported:
+        type: boolean
+    type: object
+  internal_handler.aiTestRequest:
+    properties:
+      apiKey:
+        type: string
+      baseUrl:
+        type: string
+      model:
+        type: string
+      provider:
+        type: string
+      reasoningEffort:
+        type: string
+      thinking:
+        type: boolean
+      thinkingBudget:
+        type: integer
+      thinkingSupported:
+        type: boolean
+    type: object
+  internal_handler.aiTestResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  internal_handler.appearanceSettingsRequest:
+    properties:
+      contentTypes:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_handler.appearanceSettingsResponse:
+    properties:
+      contentTypes:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_handler.authResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/internal_handler.userResponse'
+    type: object
+  internal_handler.authStatusResponse:
+    properties:
+      exists:
+        type: boolean
+    type: object
+  internal_handler.batchTranslateRequest:
+    properties:
+      articles:
+        items:
+          properties:
+            id:
+              type: string
+            summary:
+              type: string
+            title:
+              type: string
+          type: object
+        type: array
+    type: object
+  internal_handler.clearCacheResponse:
+    properties:
+      listTranslations:
+        type: integer
+      summaries:
+        type: integer
+      translations:
+        type: integer
+    type: object
+  internal_handler.createFeedRequest:
+    properties:
+      folderId:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+      url:
+        type: string
+    type: object
+  internal_handler.deleteFeedsRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_handler.deleteFoldersRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_handler.deletedCountResponse:
+    properties:
+      deleted:
+        type: integer
+    type: object
+  internal_handler.domainRateLimitListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/internal_handler.domainRateLimitResponse'
+        type: array
+    type: object
+  internal_handler.domainRateLimitRequest:
+    properties:
+      host:
+        type: string
+      intervalSeconds:
+        type: integer
+    type: object
+  internal_handler.domainRateLimitResponse:
+    properties:
+      host:
+        type: string
+      id:
+        type: string
+      intervalSeconds:
+        type: integer
+    type: object
+  internal_handler.entryClearResponse:
+    properties:
+      deleted:
+        type: integer
+    type: object
+  internal_handler.entryListResponse:
+    properties:
+      entries:
+        items:
+          $ref: '#/definitions/internal_handler.entryResponse'
+        type: array
+      hasMore:
+        type: boolean
+    type: object
+  internal_handler.entryResponse:
+    properties:
+      author:
+        type: string
+      content:
+        type: string
+      createdAt:
+        type: string
+      feedId:
+        type: string
+      id:
+        type: string
+      publishedAt:
+        type: string
+      read:
+        type: boolean
+      readableContent:
+        type: string
+      starred:
+        type: boolean
+      thumbnailUrl:
+        type: string
+      title:
+        type: string
+      updatedAt:
+        type: string
+      url:
+        type: string
+    type: object
+  internal_handler.errorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  internal_handler.feedConflictResponse:
+    properties:
+      error:
+        example: feed_exists
+        type: string
+      existingFeed:
+        $ref: '#/definitions/internal_handler.feedResponse'
+    type: object
+  internal_handler.feedPreviewResponse:
+    properties:
+      description:
+        type: string
+      imageUrl:
+        type: string
+      itemCount:
+        type: integer
+      lastUpdated:
+        type: string
+      siteUrl:
+        type: string
+      title:
+        type: string
+      url:
+        type: string
+    type: object
+  internal_handler.feedResponse:
+    properties:
+      createdAt:
+        type: string
+      description:
+        type: string
+      errorMessage:
+        type: string
+      etag:
+        type: string
+      folderId:
+        type: string
+      iconPath:
+        type: string
+      id:
+        type: string
+      lastModified:
+        type: string
+      siteUrl:
+        type: string
+      summaryPromptReminder:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+      updatedAt:
+        type: string
+      url:
+        type: string
+    type: object
+  internal_handler.folderRequest:
+    properties:
+      name:
+        type: string
+      parentId:
+        type: string
+      type:
+        type: string
+    type: object
+  internal_handler.folderResponse:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      parentId:
+        type: string
+      type:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  internal_handler.generalSettingsRequest:
+    properties:
+      autoReadability:
+        type: boolean
+      fallbackUserAgent:
+        type: string
+      markReadOnScroll:
+        type: boolean
+    type: object
+  internal_handler.generalSettingsResponse:
+    properties:
+      autoReadability:
+        type: boolean
+      fallbackUserAgent:
+        type: string
+      markReadOnScroll:
+        type: boolean
+    type: object
+  internal_handler.iconClearResponse:
+    properties:
+      deleted:
+        type: integer
+    type: object
+  internal_handler.importCancelledResponse:
+    properties:
+      cancelled:
+        type: boolean
+    type: object
+  internal_handler.importStartedResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  internal_handler.loginRequest:
+    properties:
+      identifier:
+        type: string
+      password:
+        type: string
+    type: object
+  internal_handler.markAllReadRequest:
+    properties:
+      contentType:
+        type: string
+      feedId:
+        type: string
+      folderId:
+        type: string
+    type: object
+  internal_handler.networkSettingsRequest:
+    properties:
+      enabled:
+        type: boolean
+      host:
+        type: string
+      ipStack:
+        type: string
+      password:
+        type: string
+      port:
+        type: integer
+      type:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_handler.networkSettingsResponse:
+    properties:
+      enabled:
+        type: boolean
+      host:
+        type: string
+      ipStack:
+        type: string
+      password:
+        type: string
+      port:
+        type: integer
+      type:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_handler.networkTestRequest:
+    properties:
+      enabled:
+        type: boolean
+      host:
+        type: string
+      password:
+        type: string
+      port:
+        type: integer
+      type:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_handler.networkTestResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  internal_handler.readableContentResponse:
+    properties:
+      readableContent:
+        type: string
+    type: object
+  internal_handler.refreshStatusResponse:
+    properties:
+      isRefreshing:
+        type: boolean
+      lastRefreshedAt:
+        type: string
+    type: object
+  internal_handler.registerRequest:
+    properties:
+      email:
+        type: string
+      nickname:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_handler.starredCountResponse:
+    properties:
+      count:
+        type: integer
+    type: object
+  internal_handler.summarizeRequest:
+    properties:
+      content:
+        type: string
+      entryId:
+        type: string
+      isReadability:
+        type: boolean
+      title:
+        type: string
+    type: object
+  internal_handler.summarizeResponse:
+    properties:
+      cached:
+        type: boolean
+      summary:
+        type: string
+    type: object
+  internal_handler.translateRequest:
+    properties:
+      content:
+        type: string
+      entryId:
+        type: string
+      isReadability:
+        type: boolean
+      title:
+        type: string
+    type: object
+  internal_handler.translateResponse:
+    properties:
+      cached:
+        type: boolean
+      content:
+        type: string
+    type: object
+  internal_handler.unreadCountsResponse:
+    properties:
+      counts:
+        additionalProperties:
+          type: integer
+        type: object
+    type: object
+  internal_handler.updateFeedRequest:
+    properties:
+      folderId:
+        type: string
+      summaryPromptReminder:
+        type: string
+      title:
+        type: string
+    required:
+    - title
+    type: object
+  internal_handler.updateFolderTypeRequest:
+    properties:
+      type:
+        type: string
+    type: object
+  internal_handler.updateManyReadRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        type: array
+      read:
+        type: boolean
+    type: object
+  internal_handler.updateProfileRequest:
+    properties:
+      currentPassword:
+        type: string
+      email:
+        type: string
+      newPassword:
+        type: string
+      nickname:
+        type: string
+    type: object
+  internal_handler.updateProfileResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/internal_handler.userResponse'
+    type: object
+  internal_handler.updateReadRequest:
+    properties:
+      read:
+        type: boolean
+    type: object
+  internal_handler.updateStarredRequest:
+    properties:
+      starred:
+        type: boolean
+    type: object
+  internal_handler.updateTypeRequest:
+    properties:
+      type:
+        type: string
+    type: object
+  internal_handler.userResponse:
+    properties:
+      avatarUrl:
+        type: string
+      email:
+        type: string
+      nickname:
+        type: string
+      username:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: This is a modern RSS reader API.
+  title: Gist API
+  version: "1.0"
+paths:
+  /ai/cache:
+    delete:
+      description: Delete all AI-generated summaries and translations cache.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.clearCacheResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Clear AI cache
+      tags:
+      - ai
+  /ai/summarize:
+    post:
+      consumes:
+      - application/json
+      description: Generate an AI summary of the article content. Returns cached result
+        if available, otherwise streams the response.
+      parameters:
+      - description: Summarize request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.summarizeRequest'
+      produces:
+      - application/json
+      - text/event-stream
+      responses:
+        "200":
+          description: Cached summary
+          schema:
+            $ref: '#/definitions/internal_handler.summarizeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Generate AI summary
+      tags:
+      - ai
+  /ai/translate:
+    post:
+      consumes:
+      - application/json
+      description: Translate article content. Returns cached result if available,
+        otherwise streams block translations via SSE.
+      parameters:
+      - description: Translate request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.translateRequest'
+      produces:
+      - application/json
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.translateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Generate AI translation
+      tags:
+      - ai
+  /ai/translate/batch:
+    post:
+      consumes:
+      - application/json
+      description: Translate multiple articles' titles and summaries. Returns NDJSON
+        stream.
+      parameters:
+      - description: Batch translate request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.batchTranslateRequest'
+      produces:
+      - application/x-ndjson
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gist_backend_internal_service.BatchTranslateResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Batch translate articles
+      tags:
+      - ai
+  /api/domain-rate-limits:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.domainRateLimitListResponse'
+      summary: List all domain rate limits
+      tags:
+      - domain-rate-limits
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Domain rate limit
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.domainRateLimitRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_handler.domainRateLimitResponse'
+      summary: Create a domain rate limit
+      tags:
+      - domain-rate-limits
+  /api/domain-rate-limits/{host}:
+    delete:
+      parameters:
+      - description: Host
+        in: path
+        name: host
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      summary: Delete a domain rate limit
+      tags:
+      - domain-rate-limits
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Host
+        in: path
+        name: host
+        required: true
+        type: string
+      - description: Domain rate limit
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.domainRateLimitRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.domainRateLimitResponse'
+      summary: Update a domain rate limit
+      tags:
+      - domain-rate-limits
+  /api/proxy/image/{encoded}:
+    get:
+      description: Proxies external images to avoid triggering anti-crawling mechanisms
+      parameters:
+      - description: Base64 URL-safe encoded image URL
+        in: path
+        name: encoded
+        required: true
+        type: string
+      - description: Base64 URL-safe encoded article URL (used as Referer for CDN
+          anti-hotlinking)
+        in: query
+        name: ref
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "504":
+          description: Gateway Timeout
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Proxy external image
+      tags:
+      - proxy
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate a user with username or email and get a JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.authResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Login
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      description: Clear authentication cookie and log out the user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Logout
+      tags:
+      - auth
+  /auth/me:
+    get:
+      description: Get the currently authenticated user's info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.userResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - auth
+  /auth/profile:
+    put:
+      consumes:
+      - application/json
+      description: Update user nickname, email and/or password. Returns new token
+        when password is changed.
+      parameters:
+      - description: Profile update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.updateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.updateProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update profile
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user (only if none exists)
+      parameters:
+      - description: Registration info
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.registerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.authResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Register user
+      tags:
+      - auth
+  /auth/status:
+    get:
+      description: Check if a user has been registered
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.authStatusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Check user status
+      tags:
+      - auth
+  /entries:
+    get:
+      description: Get a list of entries with optional filters and pagination
+      parameters:
+      - description: Filter by feed ID
+        in: query
+        name: feedId
+        type: integer
+      - description: Filter by folder ID
+        in: query
+        name: folderId
+        type: integer
+      - description: Filter by content type (article, picture, notification)
+        in: query
+        name: contentType
+        type: string
+      - description: Only return unread entries
+        in: query
+        name: unreadOnly
+        type: boolean
+      - description: Only return starred entries
+        in: query
+        name: starredOnly
+        type: boolean
+      - description: Limit the number of entries (default 50)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.entryListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: List entries
+      tags:
+      - entries
+  /entries/{id}:
+    get:
+      description: Get a single entry by its ID
+      parameters:
+      - description: Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.entryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Get entry
+      tags:
+      - entries
+  /entries/{id}/fetch-readable:
+    post:
+      description: Extract readable content from the entry's original URL using readability
+      parameters:
+      - description: Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.readableContentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Fetch readable content
+      tags:
+      - entries
+  /entries/{id}/read:
+    patch:
+      consumes:
+      - application/json
+      description: Mark an entry as read or unread
+      parameters:
+      - description: Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Read status
+        in: body
+        name: read
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.updateReadRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update read status
+      tags:
+      - entries
+  /entries/{id}/starred:
+    patch:
+      consumes:
+      - application/json
+      description: Mark an entry as starred or unstarred
+      parameters:
+      - description: Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Starred status
+        in: body
+        name: starred
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.updateStarredRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update starred status
+      tags:
+      - entries
+  /entries/cache:
+    delete:
+      description: Delete all unstarred entries (preserves starred entries). Also
+        resets all feeds' ETag/Last-Modified to force full refresh on next update.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.entryClearResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Clear entry cache
+      tags:
+      - entries
+  /entries/mark-read:
+    post:
+      consumes:
+      - application/json
+      description: Mark all entries as read, optionally filtered by feed, folder,
+        or content type
+      parameters:
+      - description: Filter criteria
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.markAllReadRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Mark all as read
+      tags:
+      - entries
+  /entries/read:
+    patch:
+      consumes:
+      - application/json
+      description: Mark entries as read or unread by ID list
+      parameters:
+      - description: Read status for entries
+        in: body
+        name: read
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.updateManyReadRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update read status for entries
+      tags:
+      - entries
+  /entries/readability-cache:
+    delete:
+      description: Delete all extracted readable content from entries
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.entryClearResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Clear readability cache
+      tags:
+      - entries
+  /feeds:
+    delete:
+      consumes:
+      - application/json
+      description: Unsubscribe from multiple feeds at once
+      parameters:
+      - description: Feed IDs to delete
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.deleteFeedsRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Delete multiple feeds
+      tags:
+      - feeds
+    get:
+      description: Get a list of all subscribed feeds
+      parameters:
+      - description: Filter by folder ID
+        in: query
+        name: folderId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_handler.feedResponse'
+            type: array
+      summary: List feeds
+      tags:
+      - feeds
+    post:
+      consumes:
+      - application/json
+      description: Subscribe to a new RSS/Atom feed
+      parameters:
+      - description: Feed creation request
+        in: body
+        name: feed
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.createFeedRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_handler.feedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "409":
+          description: Feed URL already exists
+          schema:
+            $ref: '#/definitions/internal_handler.feedConflictResponse'
+      summary: Create a feed
+      tags:
+      - feeds
+  /feeds/{id}:
+    delete:
+      description: Unsubscribe from a feed
+      parameters:
+      - description: Feed ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Delete a feed
+      tags:
+      - feeds
+    put:
+      consumes:
+      - application/json
+      description: Update an existing feed. title is required; folder and summary
+        prompt reminder are optional.
+      parameters:
+      - description: Feed ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Feed update request
+        in: body
+        name: feed
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.updateFeedRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.feedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update a feed
+      tags:
+      - feeds
+  /feeds/{id}/type:
+    patch:
+      consumes:
+      - application/json
+      description: Change the content type of a feed (article/picture/notification)
+      parameters:
+      - description: Feed ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Type update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.updateTypeRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update feed type
+      tags:
+      - feeds
+  /feeds/preview:
+    get:
+      description: Fetch information about a feed from its URL
+      parameters:
+      - description: Feed URL
+        in: query
+        name: url
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.feedPreviewResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Preview a feed
+      tags:
+      - feeds
+  /feeds/refresh:
+    get:
+      description: Get the current refresh status including whether a refresh is in
+        progress and when the last refresh completed
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.refreshStatusResponse'
+      summary: Get refresh status
+      tags:
+      - feeds
+    post:
+      description: Trigger an immediate refresh of all subscribed feeds
+      responses:
+        "204":
+          description: No Content
+        "409":
+          description: Refresh already in progress
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Refresh all feeds
+      tags:
+      - feeds
+  /folders:
+    delete:
+      consumes:
+      - application/json
+      description: Delete multiple folders at once (also deletes feeds in them)
+      parameters:
+      - description: Folder IDs to delete
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.deleteFoldersRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Delete multiple folders
+      tags:
+      - folders
+    get:
+      description: Get a list of all folders
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_handler.folderResponse'
+            type: array
+      summary: List folders
+      tags:
+      - folders
+    post:
+      consumes:
+      - application/json
+      description: Create a new folder to organize feeds
+      parameters:
+      - description: Folder creation request
+        in: body
+        name: folder
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.folderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: Created
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Create a folder
+      tags:
+      - folders
+  /folders/{id}:
+    delete:
+      description: Delete an existing folder
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Delete a folder
+      tags:
+      - folders
+    put:
+      consumes:
+      - application/json
+      description: Update the name or parent ID of an existing folder
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Folder update request
+        in: body
+        name: folder
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.folderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.folderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update a folder
+      tags:
+      - folders
+  /folders/{id}/type:
+    patch:
+      consumes:
+      - application/json
+      description: Change the content type of a folder (article/picture/notification)
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Type update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.updateFolderTypeRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update folder type
+      tags:
+      - folders
+  /icons/cache:
+    delete:
+      description: Delete all feed icon files and clear icon_path references in database
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.iconClearResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Clear icon cache
+      tags:
+      - icons
+  /opml/export:
+    get:
+      description: Export all feeds and folders to an OPML file
+      produces:
+      - text/xml
+      responses:
+        "200":
+          description: OPML file content
+          schema:
+            type: string
+      summary: Export OPML
+      tags:
+      - opml
+  /opml/import:
+    delete:
+      description: Cancel the current import task
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.importCancelledResponse'
+      summary: Cancel Import
+      tags:
+      - opml
+    post:
+      consumes:
+      - multipart/form-data
+      - text/xml
+      description: Start importing feeds and folders from an OPML file
+      parameters:
+      - description: OPML file to import
+        in: formData
+        name: file
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.importStartedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Import OPML
+      tags:
+      - opml
+  /opml/import/status:
+    get:
+      description: Get current import task status via SSE stream
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gist_backend_internal_service.ImportTask'
+      summary: Import Status
+      tags:
+      - opml
+  /settings/ai:
+    get:
+      description: Get the AI provider configuration with masked API keys
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.aiSettingsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Get AI settings
+      tags:
+      - settings
+    put:
+      consumes:
+      - application/json
+      description: Update the AI provider configuration. Empty apiKey keeps existing
+        key.
+      parameters:
+      - description: AI settings
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.aiSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.aiSettingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update AI settings
+      tags:
+      - settings
+  /settings/ai/test:
+    post:
+      consumes:
+      - application/json
+      description: Test the AI provider connection with a "Hello world" message
+      parameters:
+      - description: AI test configuration
+        in: body
+        name: config
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.aiTestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.aiTestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Test AI connection
+      tags:
+      - settings
+  /settings/anubis-cookies:
+    delete:
+      description: Delete all Anubis challenge cookies used for bypassing protection
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.deletedCountResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Clear Anubis cookies
+      tags:
+      - settings
+  /settings/appearance:
+    get:
+      description: Get appearance settings including visible content types
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.appearanceSettingsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Get appearance settings
+      tags:
+      - settings
+    put:
+      consumes:
+      - application/json
+      description: Update appearance settings including visible content types
+      parameters:
+      - description: Appearance settings
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.appearanceSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.appearanceSettingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update appearance settings
+      tags:
+      - settings
+  /settings/general:
+    get:
+      description: Get general application settings including fallback user agent,
+        auto readability, and mark-read-on-scroll
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.generalSettingsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Get general settings
+      tags:
+      - settings
+    put:
+      consumes:
+      - application/json
+      description: Update general application settings
+      parameters:
+      - description: General settings
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.generalSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.generalSettingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update general settings
+      tags:
+      - settings
+  /settings/network:
+    get:
+      description: Get the network proxy configuration with masked password
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.networkSettingsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Get network settings
+      tags:
+      - settings
+    put:
+      consumes:
+      - application/json
+      description: Update the network proxy configuration. Empty password keeps existing
+        password.
+      parameters:
+      - description: Network settings
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.networkSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.networkSettingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Update network settings
+      tags:
+      - settings
+  /settings/network/test:
+    post:
+      consumes:
+      - application/json
+      description: Test the network proxy connection by accessing https://captive.apple.com/
+      parameters:
+      - description: Network test configuration
+        in: body
+        name: config
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.networkTestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.networkTestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.errorResponse'
+      summary: Test network proxy
+      tags:
+      - settings
+  /starred-count:
+    get:
+      description: Get the total count of starred entries
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.starredCountResponse'
+      summary: Get starred count
+      tags:
+      - entries
+  /unread-counts:
+    get:
+      description: Get a map of feed IDs to their respective unread entry counts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.unreadCountsResponse'
+      summary: Get unread counts
+      tags:
+      - entries
+swagger: "2.0"

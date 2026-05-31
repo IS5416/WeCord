@@ -1,0 +1,12 @@
+services:
+  gist:
+    image: ghcr.io/9bingyin/gist:develop
+    container_name: gist
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - GIST_LOG_LEVEL=info
+      # - GIST_SWAGGER=true  # Enable Swagger API docs at /swagger/index.html
+    restart: always
