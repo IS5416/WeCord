@@ -57,7 +57,19 @@ docker compose up -d gist
    - **cron_exp**: `*/10 * * * *`（每 10 分钟检查）
    - **mps_id**: 你的公众号 ID
 
-### 5. 启动全部服务
+### 5. 启动全部服务（一键）
+
+```bash
+start.bat
+```
+
+脚本自动启动 Docker 容器 + ngrok 内网穿透。Discord 用户即可通过 ngrok 公网地址访问 Gist。
+
+**或手动分步启动：**
+```bash
+docker compose up -d
+ngrok http 8080
+```
 
 ```bash
 docker compose up -d
