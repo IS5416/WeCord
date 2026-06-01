@@ -37,10 +37,8 @@ services:
       - TZ=Asia/Shanghai
       # ── 从 .env 注入 ──
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
       - GIST_BASE_URL=${GIST_BASE_URL:-http://gist:8080}
+      - GIST_PUBLIC_URL=${GIST_PUBLIC_URL:-http://localhost:8080}
       - GIST_USERNAME=${GIST_USERNAME}
       - GIST_PASSWORD=${GIST_PASSWORD}
       - GIST_FEED_ID=${GIST_FEED_ID}

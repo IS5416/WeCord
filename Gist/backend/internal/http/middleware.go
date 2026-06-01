@@ -90,10 +90,18 @@ func RequestLoggerMiddleware() echo.MiddlewareFunc {
 func JWTAuthMiddleware(authService service.AuthService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			// Public-read mode: allow all GET requests without authentication
-			if os.Getenv("GIST_PUBLIC_READ") == "true" && c.Request().Method == "GET" {
+		// Public-read mode: allow GET requests + AI cache reads without auth
+		if os.Getenv("GIST_PUBLIC_READ") == "true" {
+			if c.Request().Method == "GET" {
 				return next(c)
 			}
+			// AI endpoints check cache first — safe to allow in public-read
+			if c.Request().Method == "POST" && (c.Request().URL.Path == "/api/ai/summarize" ||
+				c.Request().URL.Path == "/api/ai/translate" ||
+				c.Request().URL.Path == "/api/ai/translate/batch") {
+				return next(c)
+			}
+		}
 
 			var token string
 

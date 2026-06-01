@@ -1,13 +1,9 @@
 """
-WeCord Bridge — 微信公众号 → Discord 桥接服务
-
-接收 we-mp-rss webhook → DeepSeek AI 摘要 → Discord Embed 卡片
-预翻译：通过 Gist API 触发翻译并消费 SSE 流以写入缓存
+WeCord Bridge v2 — 全部 AI 通过 Gist，含真实文章测试端点
 """
 import json
 import logging
 import os
-import re
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -16,30 +12,22 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-# ── Logging ──────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("wecord-bridge")
 
-# ── Config ───────────────────────────────────────────────────
 DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
-DEEPSEEK_API_KEY = os.environ["DEEPSEEK_API_KEY"]
-DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 GIST_BASE_URL = os.environ.get("GIST_BASE_URL", "http://gist:8080")
+GIST_PUBLIC_URL = os.environ.get("GIST_PUBLIC_URL", GIST_BASE_URL)
 GIST_USERNAME = os.environ.get("GIST_USERNAME", "")
 GIST_PASSWORD = os.environ.get("GIST_PASSWORD", "")
 GIST_FEED_ID = os.environ.get("GIST_FEED_ID", "")
 MAX_SUMMARY_CHARS = int(os.environ.get("MAX_SUMMARY_CHARS", "300"))
 
-_gist_token: Optional[str] = None
+_gist_token: str = ""
 _gist_token_expiry: float = 0.0
 
-app = FastAPI(title="WeCord Bridge", version="1.0.0")
+app = FastAPI(title="WeCord Bridge", version="2.0.0")
 
-
-# ══════════════════════════════════════════════════════════════
-#  Gist helpers
-# ══════════════════════════════════════════════════════════════
 
 async def gist_login() -> str:
     global _gist_token, _gist_token_expiry
@@ -47,255 +35,208 @@ async def gist_login() -> str:
         return _gist_token
     if not GIST_USERNAME or not GIST_PASSWORD:
         return ""
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(
-            f"{GIST_BASE_URL}/api/auth/login",
-            json={"identifier": GIST_USERNAME, "password": GIST_PASSWORD},
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"Gist login failed: {resp.status_code}")
-        data = resp.json()
-        _gist_token = data["token"]
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.post(f"{GIST_BASE_URL}/api/auth/login",
+                         json={"identifier": GIST_USERNAME, "password": GIST_PASSWORD})
+        if r.status_code != 200:
+            raise RuntimeError(f"Gist login: {r.status_code}")
+        d = r.json()
+        _gist_token = d["token"]
         _gist_token_expiry = time.time() + 29 * 24 * 3600
         logger.info("Gist login OK")
         return _gist_token
 
 
-async def gist_find_entry_by_url(article_url: str) -> Optional[dict]:
-    token = await gist_login()
-    if not token:
-        return None
-    headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(timeout=15) as client:
-        params = {"limit": 50}
-        if GIST_FEED_ID:
-            params["feedId"] = GIST_FEED_ID
-        resp = await client.get(f"{GIST_BASE_URL}/api/entries", headers=headers, params=params)
-        if resp.status_code != 200:
-            return None
-        for entry in resp.json().get("entries", []):
-            if entry.get("url") == article_url:
-                return entry
+def _hdr() -> dict:
+    return {"Authorization": f"Bearer {_gist_token or ''}"}
+
+
+# ══════════════════════════════════════════════════════════════
+#  Gist API
+# ══════════════════════════════════════════════════════════════
+
+async def gist_refresh() -> None:
+    """Fire-and-forget: trigger Gist refresh, don't wait for result."""
+    try:
+        await gist_login()
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.post(f"{GIST_BASE_URL}/api/feeds/refresh", headers=_hdr())
+            logger.info("Gist refresh triggered: %s", r.status_code)
+    except Exception as e:
+        logger.warning("Gist refresh skipped: %s", e)
+
+
+async def gist_get_entries(feed_id: str = "", limit: int = 200) -> list[dict]:
+    await gist_login()
+    params = {"limit": limit}
+    if feed_id:
+        params["feedId"] = feed_id
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(f"{GIST_BASE_URL}/api/entries", headers=_hdr(), params=params)
+        if r.status_code != 200:
+            return []
+        return r.json().get("entries", [])
+
+
+async def gist_find_entry(url: str) -> Optional[dict]:
+    entries = await gist_get_entries(GIST_FEED_ID, 200)
+    url = url.rstrip("/")
+    for e in entries:
+        eu = (e.get("url") or "").rstrip("/")
+        if eu == url or eu.replace("https://", "http://") == url.replace("https://", "http://"):
+            return e
     return None
 
 
 async def gist_get_entry(entry_id: str) -> Optional[dict]:
-    """Fetch full entry by ID (includes content field)."""
-    token = await gist_login()
-    if not token:
-        return None
-    headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(f"{GIST_BASE_URL}/api/entries/{entry_id}", headers=headers)
-        if resp.status_code != 200:
-            return None
-        return resp.json()
+    await gist_login()
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(f"{GIST_BASE_URL}/api/entries/{entry_id}", headers=_hdr())
+        return r.json() if r.status_code == 200 else None
 
 
-async def gist_pre_translate(entry_id: str, content: str, title: str) -> bool:
-    """
-    Trigger Gist AI translation and consume the SSE stream.
-    The translation handler now auto-saves to cache on completion.
-    Returns True if a cache hit, False if stream was consumed.
-    """
-    token = await gist_login()
-    if not token:
-        return False
-
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    body = {
-        "entryId": entry_id,
-        "content": content,
-        "title": title,
-        "isReadability": False,
-    }
-
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            f"{GIST_BASE_URL}/api/ai/translate", headers=headers, json=body,
-        )
-
-        content_type = resp.headers.get("Content-Type", "")
-
-        # Cache hit → JSON response
-        if "application/json" in content_type:
-            data = resp.json()
-            if data.get("cached"):
-                logger.info("Gist translate: cache hit for entry %s", entry_id)
-                return True
-
-        # SSE stream → consume until done
-        if "text/event-stream" in content_type:
-            logger.info("Gist translate: consuming SSE stream for entry %s", entry_id)
-            async for _ in resp.aiter_lines():
-                pass  # just drain the stream; handler saves to cache on completion
-            logger.info("Gist translate: stream done for entry %s", entry_id)
-            return True
-
-        logger.warning("Gist translate: unexpected content-type %s", content_type)
-        return False
-
-
-# ══════════════════════════════════════════════════════════════
-#  DeepSeek AI
-# ══════════════════════════════════════════════════════════════
-
-TRANSLATE_PROMPT = """You are a professional translator and summariser. 
-Given a Chinese article title and content, do the following:
-
-1. Translate the title to natural English.
-2. Write a concise English summary (2-4 sentences, max {max_chars} characters).
-3. Output ONLY valid JSON in this exact format, with no extra text:
-{{"title_en": "...", "summary_en": "..."}}
-"""
-
-
-async def translate_and_summarize(title_cn: str, description_cn: str) -> dict:
-    prompt = TRANSLATE_PROMPT.format(max_chars=MAX_SUMMARY_CHARS)
-    user_message = f"Title: {title_cn}\n\nContent: {description_cn}"
-    body = {
-        "model": DEEPSEEK_MODEL,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_message},
-        ],
-        "temperature": 0.3,
-        "max_tokens": 600,
-    }
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
-            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-            json=body,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"DeepSeek API error: {resp.status_code}")
-        content = resp.json()["choices"][0]["message"]["content"].strip()
-        if content.startswith("```"):
-            content = "\n".join(content.split("\n")[1:-1])
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            return {"title_en": title_cn, "summary_en": description_cn[:MAX_SUMMARY_CHARS]}
-
-
-# ══════════════════════════════════════════════════════════════
-#  Discord embed
-# ══════════════════════════════════════════════════════════════
-
-def build_discord_embed(
-    feed_name: str, title_en: str, summary_en: str,
-    article_url: str, gist_entry: Optional[dict],
-    pic_url: Optional[str], publish_time: Optional[str],
-    *, test_mode: bool = False, translating: bool = False,
-) -> dict:
-    prefix = "🧪 [TEST] " if test_mode else ""
-    embed = {
-        "title": prefix + title_en,
-        "url": article_url,
-        "description": summary_en,
-        "color": 0xED5B2D,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "footer": {"text": f"via {feed_name} · WeCord Bridge"},
-    }
-    if pic_url:
-        embed["thumbnail"] = {"url": pic_url}
-
-    fields = []
-    if gist_entry:
-        entry_id = gist_entry["id"]
-        status = "⏳ Translating…" if translating else "📖 English Translation Ready"
-        fields.append({
-            "name": status,
-            "value": f"[Read on Gist]({GIST_BASE_URL}/#/entries/{entry_id})",
-            "inline": False,
+async def gist_summarize(entry_id: str, content: str, title: str) -> str:
+    """Call Gist AI summarize. Returns cached result instantly or consumes SSE."""
+    await gist_login()
+    async with httpx.AsyncClient(timeout=90) as c:
+        r = await c.post(f"{GIST_BASE_URL}/api/ai/summarize", headers=_hdr(), json={
+            "entryId": entry_id, "content": content, "title": title, "isReadability": False,
         })
-    if publish_time:
-        try:
-            pt = datetime.fromisoformat(publish_time.replace("Z", "+00:00"))
-            fields.append({"name": "Published", "value": f"<t:{int(pt.timestamp())}:R>", "inline": True})
-        except (ValueError, TypeError):
-            pass
-    if test_mode:
-        fields.append({"name": "Mode", "value": "🧪 End-to-End Test", "inline": True})
-    if fields:
-        embed["fields"] = fields
-    return embed
+        ct = r.headers.get("Content-Type", "")
+        if "application/json" in ct:
+            s = r.json().get("summary", "")
+            logger.info("Summarize cache hit #%s (%d chars)", entry_id, len(s))
+            return s[:MAX_SUMMARY_CHARS]
+        chunks = []
+        async for chunk in r.aiter_bytes():
+            try:
+                chunks.append(chunk.decode("utf-8"))
+            except Exception:
+                pass
+        s = "".join(chunks).strip()
+        logger.info("Summarize stream done #%s (%d chars)", entry_id, len(s))
+        return s[:MAX_SUMMARY_CHARS]
+
+
+async def gist_translate(entry_id: str, content: str, title: str) -> bool:
+    """Trigger Gist AI translate. Drains SSE to populate cache."""
+    await gist_login()
+    async with httpx.AsyncClient(timeout=120) as c:
+        r = await c.post(f"{GIST_BASE_URL}/api/ai/translate", headers=_hdr(), json={
+            "entryId": entry_id, "content": content, "title": title, "isReadability": False,
+        })
+        ct = r.headers.get("Content-Type", "")
+        if "application/json" in ct:
+            logger.info("Translate cache hit #%s", entry_id)
+            return True
+        if "text/event-stream" in ct:
+            logger.info("Translate SSE #%s...", entry_id)
+            async for _ in r.aiter_lines():
+                pass
+            logger.info("Translate done #%s", entry_id)
+            return True
+        return False
+
+
+# ══════════════════════════════════════════════════════════════
+#  Discord
+# ══════════════════════════════════════════════════════════════
+
+def gist_entry_url(entry: dict) -> str:
+    """Build Gist URL for Discord users: /feed/{feedId}/{entryId}?type=article"""
+    fid = entry.get("feedId", "")
+    eid = entry.get("id", "")
+    return f"{GIST_PUBLIC_URL}/feed/{fid}/{eid}?type=article"
+
+
+def build_embed(feed_name: str, title_en: str, summary_en: str,
+                article_url: str, gist_url: str, *, test: bool = False) -> dict:
+    # Discord limits: title 256, description 4096, field value 1024
+    # Note: embed "url" must be publicly reachable — use original URL, not internal Gist
+    return {
+        "title": (("🧪 [TEST] " if test else "") + title_en)[:256],
+        "url": article_url,
+        "description": summary_en[:4096],
+        "color": 0xED5B2D,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        "footer": {"text": f"via {feed_name} · WeCord"},
+        "fields": [
+            {"name": "Read Full Translation",
+             "value": f"[Open in Gist]({gist_url})" if gist_url else article_url,
+             "inline": False},
+        ] + ([{"name": "Mode", "value": "🧪 Test", "inline": True}] if test else []),
+    }
 
 
 async def send_discord(embeds: list[dict]) -> None:
     payload = {"embeds": embeds}
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(DISCORD_WEBHOOK_URL, json=payload)
-        if resp.status_code == 204:
-            logger.info("Discord OK (%d embeds)", len(embeds))
+    headers = {"Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.post(DISCORD_WEBHOOK_URL, json=payload, headers=headers)
+        if r.status_code == 204:
+            logger.info("Discord OK (%d)", len(embeds))
         else:
-            logger.error("Discord failed: %s %s", resp.status_code, resp.text[:300])
+            logger.error("Discord fail: %s", r.status_code)
+            logger.error("Payload: %s", json.dumps(payload, ensure_ascii=False)[:800])
 
 
 # ══════════════════════════════════════════════════════════════
-#  Core processor
+#  Core
 # ══════════════════════════════════════════════════════════════
 
-async def process_articles(
-    articles: list[dict], feed_name: str, *, test_mode: bool = False,
-) -> dict:
+async def process_one(title_cn: str, summary_cn: str, article_url: str,
+                      gist_entry: dict, *, test: bool = False) -> dict:
+    """Process one article: summarize, translate, return embed."""
+    eid = gist_entry["id"]
+    gurl = gist_entry_url(gist_entry)
+
+    # Get full content
+    full = await gist_get_entry(eid)
+    content = (full or {}).get("content") or summary_cn
+
+    # Summarize via Gist AI
+    try:
+        summary_en = await gist_summarize(eid, content, title_cn)
+        logger.info("  summary: %d chars", len(summary_en))
+    except Exception as e:
+        logger.error("  summarize error: %s", e)
+        summary_en = summary_cn[:MAX_SUMMARY_CHARS]
+
+    # Translate (best-effort, drains SSE to populate cache)
+    try:
+        await gist_translate(eid, content, title_cn)
+    except Exception as e:
+        logger.warning("  translate error: %s", e)
+
+    return build_embed(feed_name="", title_en=title_cn,
+                       summary_en=summary_en,
+                       article_url=article_url, gist_url=gurl, test=test)
+
+
+async def process_articles(articles: list[dict], feed_name: str, *,
+                           test: bool = False) -> dict:
     logs, embeds = [], []
-    for idx, article in enumerate(articles):
-        title_cn = article.get("title", "Untitled")
-        desc_cn = article.get("description", "")
-        article_url = article.get("url", "")
-        pic_url = article.get("pic_url", "")
-        publish_time = article.get("publish_time", "")
-        step = f"[{idx + 1}/{len(articles)}]"
-        logger.info("%s Processing: %s", step, title_cn[:80])
+    for i, a in enumerate(articles):
+        t = a.get("title", "?")
+        d = a.get("description", "")
+        u = a.get("url", "")
+        logger.info("[%d/%d] %s", i + 1, len(articles), t[:60])
 
-        # 1. DeepSeek summary
-        try:
-            result = await translate_and_summarize(title_cn, desc_cn)
-            title_en = result.get("title_en", title_cn)
-            summary_en = result.get("summary_en", desc_cn[:MAX_SUMMARY_CHARS])
-            logs.append(f"OK: {title_cn[:30]}... -> {title_en[:50]}...")
-        except Exception as e:
-            logger.error("DeepSeek: %s", e)
-            title_en, summary_en = title_cn, f"[Error: {e}]"
-            logs.append(f"FAIL: {e}")
+        # Look up Gist entry by URL
+        ge = await gist_find_entry(u)
+        if not ge:
+            # Maybe Gist hasn't synced yet — trigger refresh (best-effort)
+            await gist_refresh()
+            logs.append(f"Not found in Gist: {t[:30]}…")
+            embeds.append(build_embed(
+                feed_name, t, d[:MAX_SUMMARY_CHARS], u, "", test=test))
+            continue
 
-        # 2. Gist lookup + pre-translate
-        gist_entry = None
-        translating = False
-        try:
-            if article_url:
-                gist_entry = await gist_find_entry_by_url(article_url)
-                if gist_entry:
-                    eid = gist_entry["id"]
-                    logs.append(f"Gist: #{eid}")
-                    # Fetch full content & trigger translation
-                    full = await gist_get_entry(eid)
-                    content = (full or {}).get("content") or gist_entry.get("content", "")
-                    if content:
-                        logs.append(f"Pre-translating #{eid}…")
-                        translating = True
-                        try:
-                            await gist_pre_translate(eid, content, title_cn)
-                            translating = False
-                            logs.append(f"Pre-translate done #{eid}")
-                        except Exception as e:
-                            logs.append(f"Pre-translate failed: {e}")
-                else:
-                    logs.append("Gist: not found (ok)")
-        except Exception as e:
-            logs.append(f"Gist error: {e}")
-
-        # 3. Discord embed
-        embeds.append(build_discord_embed(
-            feed_name, title_en, summary_en, article_url, gist_entry,
-            pic_url, publish_time, test_mode=test_mode, translating=translating,
-        ))
+        logs.append(f"Gist #{ge['id']}")
+        embeds.append(await process_one(t, d, u, ge, test=test))
 
     if embeds:
         await send_discord(embeds)
-        logs.append(f"Sent {len(embeds)} embed(s)")
     return {"status": "ok", "sent": len(embeds), "logs": logs}
 
 
@@ -305,44 +246,43 @@ async def process_articles(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "gist_token": bool(_gist_token)}
 
 
 @app.post("/webhook")
 async def webhook(request: Request):
     try:
-        payload = await request.json()
+        p = await request.json()
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-    logger.info("Webhook: %s", json.dumps(payload, ensure_ascii=False)[:500])
-    feed = payload.get("feed", {})
-    feed_name = feed.get("name", feed.get("mp_name", "Unknown"))
-    articles = payload.get("articles", [])
-    if not articles:
-        return JSONResponse({"status": "no_articles"})
-    return JSONResponse(await process_articles(articles, feed_name))
-
-
-MOCK_ARTICLES = [
-    {
-        "id": "test-001", "mp_id": "test_mp_123",
-        "title": "深度解析：2026年AI在医疗领域的五大突破性应用",
-        "url": "https://mp.weixin.qq.com/s/test-001", "pic_url": "",
-        "description": "从影像诊断到药物研发，AI正在重塑医疗行业。AI辅助癌症早期筛查准确率突破98%，智能药物分子设计将研发周期缩短60%，个性化基因治疗方案让罕见病治疗成为可能，手术机器人实现亚毫米级精准操作。",
-        "publish_time": "2026-06-01 10:00:00",
-    },
-    {
-        "id": "test-002", "mp_id": "test_mp_123",
-        "title": "从零搭建个人AI知识库：RAG技术实战指南",
-        "url": "https://mp.weixin.qq.com/s/test-002", "pic_url": "",
-        "description": "RAG（检索增强生成）是当前大模型应用最热门架构之一。本文从ChromaDB向量数据库到LangChain集成，再到DeepSeek大模型对接，手把手教你搭建专属AI知识库助手。",
-        "publish_time": "2026-06-01 09:30:00",
-    },
-]
+        raise HTTPException(400, "Invalid JSON")
+    logger.info("Webhook: %s", json.dumps(p, ensure_ascii=False)[:500])
+    feed = p.get("feed", {})
+    return JSONResponse(await process_articles(
+        p.get("articles", []), feed.get("name", "")))
 
 
 @app.post("/test")
-async def test_e2e():
-    logger.info("TEST: %d mock articles", len(MOCK_ARTICLES))
-    result = await process_articles(MOCK_ARTICLES, "Test Feed", test_mode=True)
-    return JSONResponse({"test": True, "articles": len(MOCK_ARTICLES), **result})
+async def test():
+    """
+    Fetch real entries from Gist (via API), run full summarize + translate +
+    Discord pipeline. Uses Gist's existing AI cache — no extra token cost
+    for already-translated articles.
+    """
+    await gist_login()
+    entries = await gist_get_entries(GIST_FEED_ID, 3)
+    if not entries:
+        return JSONResponse({"error": "No entries found in Gist. "
+                             "Make sure GIST_FEED_ID is correct and Gist has synced RSS."})
+
+    # Convert Gist entries to article format expected by process_articles
+    articles = []
+    for e in entries:
+        articles.append({
+            "title": e.get("title") or "(no title)",
+            "description": (e.get("content") or "")[:500],
+            "url": e.get("url") or "",
+        })
+
+    logger.info("TEST: %d real entries from Gist feed %s", len(articles), GIST_FEED_ID or "all")
+    result = await process_articles(articles, "Gist Test", test=True)
+    return JSONResponse({"test": True, "source": "gist", **result})
