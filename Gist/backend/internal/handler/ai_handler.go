@@ -52,6 +52,7 @@ func (h *AIHandler) RegisterRoutes(g *echo.Group) {
 	g.POST("/ai/translate", h.Translate)
 	g.POST("/ai/translate/batch", h.TranslateBatch)
 	g.DELETE("/ai/cache", h.ClearCache)
+	g.DELETE("/ai/translations/:id", h.DeleteTranslation)
 }
 
 // Summarize generates an AI summary of the content.
@@ -428,6 +429,29 @@ type clearCacheResponse struct {
 // @Success 200 {object} clearCacheResponse
 // @Failure 500 {object} errorResponse
 // @Router /ai/cache [delete]
+// DeleteTranslation deletes the translation cache for a single entry.
+// @Summary Delete translation cache for entry
+// @Description Delete the AI translation cache for a specific entry.
+// @Tags ai
+// @Param id path int true "Entry ID"
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Failure 500 {object} errorResponse
+// @Router /ai/translations/{id} [delete]
+func (h *AIHandler) DeleteTranslation(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid entry ID"})
+	}
+	ctx := c.Request().Context()
+	if err := h.service.DeleteTranslation(ctx, id); err != nil {
+		logger.Error("ai translation delete failed", "entry_id", id, "error", err)
+		return c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
+	}
+	logger.Info("ai translation deleted", "entry_id", id)
+	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (h *AIHandler) ClearCache(c echo.Context) error {
 	ctx := c.Request().Context()
 

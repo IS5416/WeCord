@@ -48,9 +48,20 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     shouldRedirectToRoot: false,
 
     initialize: async () => {
+      // Helper: try checkAuthStatus with retry (ngrok interstitial workaround)
+      const check = async (retries = 2): Promise<{ exists: boolean; publicRead: boolean }> => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            return await checkAuthStatus()
+          } catch {
+            if (i < retries - 1) await new Promise(r => setTimeout(r, 1500))
+            else throw new Error('auth status check failed')
+          }
+        }
+        throw new Error('unreachable')
+      }
       try {
-        // Check if user exists in backend
-        const { exists, publicRead } = await checkAuthStatus()
+        const { exists, publicRead } = await check()
 
         // Public-read mode: skip authentication entirely
         if (publicRead) {

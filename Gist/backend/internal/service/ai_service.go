@@ -67,6 +67,7 @@ type AIService interface {
 	TranslateBatch(ctx context.Context, articles []BatchArticleInput) (<-chan BatchTranslateResult, <-chan error, error)
 	// ClearAllCache deletes all AI cache data (summaries, translations, list translations).
 	// Returns the number of deleted records for each type.
+	DeleteTranslation(ctx context.Context, entryID int64) error
 	ClearAllCache(ctx context.Context) (summaries, translations, listTranslations int64, err error)
 }
 
@@ -640,6 +641,10 @@ func parseEntryID(id string) (int64, error) {
 	var entryID int64
 	_, err := fmt.Sscanf(id, "%d", &entryID)
 	return entryID, err
+}
+
+func (s *aiService) DeleteTranslation(ctx context.Context, entryID int64) error {
+	return s.translationRepo.DeleteByEntryID(ctx, entryID)
 }
 
 func (s *aiService) ClearAllCache(ctx context.Context) (summaries, translations, listTranslations int64, err error) {

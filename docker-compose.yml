@@ -43,4 +43,7 @@ services:
       - GIST_PASSWORD=${GIST_PASSWORD}
       - GIST_FEED_ID=${GIST_FEED_ID}
       - MAX_SUMMARY_CHARS=${MAX_SUMMARY_CHARS:-300}
+      - WERSS_BASE_URL=${WERSS_BASE_URL:-http://we-mp-rss:8001}
+      - WERSS_AK=${WERSS_AK:-}
+      - WERSS_SK=${WERSS_SK:-}
     restart: unless-stopped

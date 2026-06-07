@@ -96,9 +96,10 @@ func JWTAuthMiddleware(authService service.AuthService) echo.MiddlewareFunc {
 				return next(c)
 			}
 			// AI endpoints check cache first — safe to allow in public-read
-			if c.Request().Method == "POST" && (c.Request().URL.Path == "/api/ai/summarize" ||
+			if (c.Request().Method == "POST" || c.Request().Method == "DELETE") && (c.Request().URL.Path == "/api/ai/summarize" ||
 				c.Request().URL.Path == "/api/ai/translate" ||
-				c.Request().URL.Path == "/api/ai/translate/batch") {
+				c.Request().URL.Path == "/api/ai/translate/batch" ||
+				strings.HasPrefix(c.Request().URL.Path, "/api/ai/translations/")) {
 				return next(c)
 			}
 		}
